@@ -1,8 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
 PyInstaller spec file for Voice Note application.
-Bundles ffmpeg and ffprobe for full audio format support.
-Handles PyTorch DLL collection on Windows.
+Bundles ffmpeg/ffprobe and handles PyTorch DLL issues on Windows.
 """
 
 import os
@@ -12,7 +11,7 @@ from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
 
 block_cipher = None
 
-# ── Collect PyTorch fully (critical for Windows DLLs) ──
+# ── Collect PyTorch & Whisper fully (critical for Windows DLLs) ──
 torch_datas, torch_binaries, torch_hiddenimports = collect_all('torch')
 whisper_datas, whisper_binaries, whisper_hiddenimports = collect_all('whisper')
 
@@ -57,7 +56,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=["hooks/rthook_torch.py"],  # Fix Windows DLL search paths
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -87,5 +86,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,  # Add .icns (Mac) or .ico (Win) path here for custom icon
+    icon=None,
 )

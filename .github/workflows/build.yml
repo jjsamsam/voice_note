@@ -46,6 +46,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install audioop-lts
+          pip install torch --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
           pip install -r requirements.txt
 
       - name: 🏗️ PyInstaller 빌드
