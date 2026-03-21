@@ -1,0 +1,9 @@
+openai-whisper
+audioop-lts
+PyQt6
+sounddevice
+soundfile
+pydub
+deep-translator
+numpy
+pyinstaller
