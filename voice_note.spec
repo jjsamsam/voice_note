@@ -2,42 +2,59 @@
 """
 PyInstaller spec file for Voice Note application.
 Bundles ffmpeg and ffprobe for full audio format support.
+Handles PyTorch DLL collection on Windows.
 """
 
 import os
+import sys
 import shutil
+from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
 
 block_cipher = None
 
-# Find ffmpeg and ffprobe paths
+# ── Collect PyTorch fully (critical for Windows DLLs) ──
+torch_datas, torch_binaries, torch_hiddenimports = collect_all('torch')
+whisper_datas, whisper_binaries, whisper_hiddenimports = collect_all('whisper')
+
+# ── Find ffmpeg / ffprobe ──
 ffmpeg_path = shutil.which("ffmpeg")
 ffprobe_path = shutil.which("ffprobe")
 
-# Prepare data files to bundle
-added_files = []
+added_binaries = []
 if ffmpeg_path:
-    added_files.append((ffmpeg_path, "ffmpeg"))
+    added_binaries.append((ffmpeg_path, "ffmpeg"))
 if ffprobe_path:
-    added_files.append((ffprobe_path, "ffmpeg"))
+    added_binaries.append((ffprobe_path, "ffmpeg"))
+
+# Merge binaries
+added_binaries += torch_binaries + whisper_binaries
+
+# ── Hidden imports ──
+hiddenimports = [
+    "sounddevice",
+    "soundfile",
+    "pydub",
+    "numpy",
+    "whisper",
+    "torch",
+    "tiktoken",
+    "tiktoken_ext",
+    "tiktoken_ext.openai_public",
+    "numba",
+    "deep_translator",
+    "audioop",
+]
+hiddenimports += torch_hiddenimports + whisper_hiddenimports
+
+# ── Datas ──
+added_datas = torch_datas + whisper_datas
 
 a = Analysis(
     ["src/main.py"],
     pathex=["."],
-    binaries=added_files,
-    datas=[],
-    hiddenimports=[
-        "sounddevice",
-        "soundfile",
-        "pydub",
-        "numpy",
-        "whisper",
-        "torch",
-        "tiktoken",
-        "tiktoken_ext",
-        "tiktoken_ext.openai_public",
-        "numba",
-        "deep_translator",
-    ],
+    binaries=added_binaries,
+    datas=added_datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
