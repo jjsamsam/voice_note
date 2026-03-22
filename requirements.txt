@@ -1,5 +1,4 @@
 openai-whisper
-audioop-lts
 PyQt6
 sounddevice
 soundfile
