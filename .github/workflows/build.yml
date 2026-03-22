@@ -13,10 +13,8 @@ jobs:
         include:
           - os: macos-latest
             artifact_name: VoiceNote-macOS
-            binary_name: VoiceNote
           - os: windows-latest
             artifact_name: VoiceNote-Windows
-            binary_name: VoiceNote.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -27,7 +25,7 @@ jobs:
       - name: 🐍 Python 설정
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.11'
           cache: 'pip'
 
       - name: 🔧 ffmpeg 설치 (macOS)
@@ -38,14 +36,20 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install ffmpeg -y
 
-      - name: 🔧 Visual C++ Redistributable 설치 (Windows)
+      - name: 🔧 Visual C++ Redistributable (Windows)
         if: runner.os == 'Windows'
         run: choco install vcredist140 -y
 
-      - name: 📦 의존성 설치
+      - name: 📦 의존성 설치 (macOS)
+        if: runner.os == 'macOS'
         run: |
           python -m pip install --upgrade pip
-          pip install audioop-lts
+          pip install -r requirements.txt
+
+      - name: 📦 의존성 설치 (Windows - CPU-only PyTorch)
+        if: runner.os == 'Windows'
+        run: |
+          python -m pip install --upgrade pip
           pip install torch --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
           pip install -r requirements.txt
 
@@ -53,15 +57,24 @@ jobs:
         run: pyinstaller voice_note.spec
 
       - name: 📁 빌드 결과 확인
-        run: |
-          ls -la dist/
+        run: ls -la dist/VoiceNote/
         shell: bash
+
+      - name: 📦 배포 파일 압축 (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd dist && zip -r ../VoiceNote-macOS.zip VoiceNote/
+
+      - name: 📦 배포 파일 압축 (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Compress-Archive -Path dist\VoiceNote\* -DestinationPath VoiceNote-Windows.zip
 
       - name: ⬆️ 빌드 결과 업로드
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: dist/${{ matrix.binary_name }}
+          path: ${{ matrix.artifact_name }}.zip
           retention-days: 30
 
   release:
@@ -77,38 +90,44 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: VoiceNote-macOS
-          path: artifacts/macos
+          path: artifacts/
 
       - name: 📥 Windows 빌드 다운로드
         uses: actions/download-artifact@v4
         with:
           name: VoiceNote-Windows
-          path: artifacts/windows
-
-      - name: 📦 릴리스 파일 준비
-        run: |
-          cd artifacts/macos && zip -r ../../VoiceNote-macOS.zip . && cd ../..
-          cd artifacts/windows && zip -r ../../VoiceNote-Windows.zip . && cd ../..
+          path: artifacts/
 
       - name: 🚀 GitHub Release 생성
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            VoiceNote-macOS.zip
-            VoiceNote-Windows.zip
+            artifacts/VoiceNote-macOS.zip
+            artifacts/VoiceNote-Windows.zip
           body: |
             ## Voice Note 🎙
 
-            ### 다운로드
-            - **macOS**: `VoiceNote-macOS.zip` 다운로드 → 압축 해제 → `VoiceNote` 더블 클릭
-            - **Windows**: `VoiceNote-Windows.zip` 다운로드 → 압축 해제 → `VoiceNote.exe` 더블 클릭
+            ### 📥 다운로드 및 실행 방법
+
+            #### macOS
+            1. `VoiceNote-macOS.zip` 다운로드
+            2. 압축 해제
+            3. `VoiceNote` 폴더 안의 `VoiceNote` 파일 더블 클릭
+
+            #### Windows
+            1. `VoiceNote-Windows.zip` 다운로드
+            2. 압축 해제
+            3. `VoiceNote.exe` 더블 클릭
+
+            > ⚠️ Windows에서 "보호된 앱" 경고가 나타나면 "추가 정보" → "실행"을 클릭하세요
 
             ### 기능
             - 🎤 음성 녹음 (WAV/MP3/MP4 저장)
             - 🔊 음성 → 텍스트 변환 (OpenAI Whisper)
             - 🌐 다국어 번역 (Google Translate)
+            - 📋 텍스트 복사
 
             ### 참고
-            - 첫 실행 시 Whisper 모델 다운로드로 시간이 걸릴 수 있습니다
-            - ffmpeg이 실행 파일에 포함되어 있어 별도 설치가 필요 없습니다
+            - 첫 실행 시 Whisper 모델 다운로드에 시간이 걸릴 수 있습니다 (인터넷 필요)
+            - ffmpeg이 포함되어 있어 별도 설치가 필요 없습니다
           generate_release_notes: true

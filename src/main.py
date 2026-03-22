@@ -1,5 +1,8 @@
 """
 Voice Note Application — Entry Point
+
+IMPORTANT: torch must be imported BEFORE PyQt6 on Windows.
+PyQt6 loads Qt DLLs that conflict with PyTorch's DLL resolution if loaded first.
 """
 
 import sys
@@ -7,6 +10,9 @@ import os
 
 # Ensure src is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# ── CRITICAL: Import torch BEFORE PyQt6 to avoid DLL conflicts on Windows ──
+import torch  # noqa: F401 — must be first
 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
