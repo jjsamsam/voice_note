@@ -18,6 +18,7 @@ block_cipher = None
 # ── Collect PyTorch & Whisper fully ──
 torch_datas, torch_binaries, torch_hiddenimports = collect_all('torch')
 whisper_datas, whisper_binaries, whisper_hiddenimports = collect_all('whisper')
+numpy_datas, numpy_binaries, numpy_hiddenimports = collect_all('numpy')
 
 # ── Find ffmpeg / ffprobe ──
 ffmpeg_path = shutil.which("ffmpeg")
@@ -30,16 +31,13 @@ if ffprobe_path:
     added_binaries.append((ffprobe_path, "ffmpeg"))
 
 # Merge binaries
-added_binaries += torch_binaries + whisper_binaries
+added_binaries += torch_binaries + whisper_binaries + numpy_binaries
 
 # ── Filter out Windows system DLLs that cause conflicts ──
 # These are collected from the build server but conflict with the user's Windows.
+# ONLY exclude api-ms-win-* — keep vcruntime/msvcp/ucrtbase as numpy needs them.
 EXCLUDE_DLLS = {
-    'api-ms-win-',          # Windows API sets
-    'ucrtbase',             # Universal C Runtime (system)
-    'vcruntime',            # VC++ Runtime (user should have installed)
-    'msvcp',                # VC++ Runtime
-    'concrt',               # Concurrency Runtime
+    'api-ms-win-',          # Windows API sets — always provided by the OS
 }
 
 def should_exclude(name):
@@ -52,6 +50,9 @@ added_binaries = [
     (src, dst) for src, dst in added_binaries
     if not should_exclude(os.path.basename(src))
 ]
+
+# ── Datas (include numpy) ──
+added_datas = torch_datas + whisper_datas + numpy_datas
 
 # ── Hidden imports ──
 hiddenimports = [
@@ -68,10 +69,7 @@ hiddenimports = [
     "deep_translator",
     "audioop",
 ]
-hiddenimports += torch_hiddenimports + whisper_hiddenimports
-
-# ── Datas ──
-added_datas = torch_datas + whisper_datas
+hiddenimports += torch_hiddenimports + whisper_hiddenimports + numpy_hiddenimports
 
 a = Analysis(
     ["src/main.py"],
@@ -109,7 +107,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,   # Back to False — DLL issue fixed
+    console=True,   # Keep True until all DLL issues resolved
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

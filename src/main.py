@@ -7,9 +7,78 @@ before importing torch, and torch must be imported before PyQt6.
 
 import sys
 import os
+import traceback
 
 # Ensure src is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _save_error_log(module_name, error):
+    """Save detailed error log to file and show popup directing user to it."""
+    # Build detailed log
+    lines = [
+        f"=== Voice Note Error Log ===",
+        f"Module: {module_name}",
+        f"Error: {error}",
+        f"",
+        f"--- Traceback ---",
+        traceback.format_exc(),
+        f"",
+        f"--- Environment ---",
+        f"Python: {sys.version}",
+        f"Platform: {sys.platform}",
+        f"Frozen: {getattr(sys, 'frozen', False)}",
+    ]
+
+    if getattr(sys, "frozen", False):
+        _base = sys._MEIPASS
+        lines.append(f"MEIPASS: {_base}")
+        lines.append(f"")
+
+        # List all DLLs in key directories
+        for subdir in ["", "torch/lib", "numpy/.libs", "numpy.libs"]:
+            full = os.path.join(_base, subdir) if subdir else _base
+            if os.path.isdir(full):
+                dlls = sorted(f for f in os.listdir(full) if f.lower().endswith(".dll"))
+                lines.append(f"--- {subdir or '_internal'} ({len(dlls)} DLLs) ---")
+                for d in dlls:
+                    lines.append(f"  {d}")
+                lines.append("")
+
+    log_text = "\n".join(lines)
+
+    # Save to file next to exe
+    if getattr(sys, "frozen", False):
+        log_path = os.path.join(os.path.dirname(sys.executable), "error_log.txt")
+    else:
+        log_path = os.path.join(os.path.dirname(__file__), "error_log.txt")
+
+    try:
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(log_text)
+    except Exception:
+        log_path = os.path.join(os.path.expanduser("~"), "VoiceNote_error_log.txt")
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(log_text)
+
+    # Print to console
+    print(log_text, file=sys.stderr)
+
+    # Show short popup pointing to the file
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            short_msg = (
+                f"{module_name} 로딩 실패!\n\n"
+                f"에러: {error}\n\n"
+                f"상세 로그 파일:\n{log_path}\n\n"
+                f"이 파일을 개발자에게 공유해 주세요."
+            )
+            ctypes.windll.user32.MessageBoxW(0, short_msg, "Voice Note - Error", 0x10)
+        except Exception:
+            pass
+
+    sys.exit(1)
 
 # ── Setup DLL search paths for PyInstaller bundle (Windows) ──
 if sys.platform == "win32" and getattr(sys, "frozen", False):
@@ -54,27 +123,8 @@ if sys.platform == "win32" and getattr(sys, "frozen", False):
 # ── Import torch BEFORE PyQt6 ──
 try:
     import torch  # noqa: F401
-except OSError as e:
-    # If still failing, show diagnostic info
-    msg = f"PyTorch DLL 로딩 실패: {e}\n\n"
-    if getattr(sys, "frozen", False):
-        _base = sys._MEIPASS
-        _tlib = os.path.join(_base, "torch", "lib")
-        msg += f"MEIPASS: {_base}\n"
-        msg += f"torch/lib exists: {os.path.isdir(_tlib)}\n"
-        if os.path.isdir(_tlib):
-            dlls = [f for f in os.listdir(_tlib) if f.endswith(".dll")]
-            msg += f"torch/lib DLLs ({len(dlls)}): {', '.join(dlls)}\n"
-        base_dlls = [f for f in os.listdir(_base) if f.endswith(".dll")]
-        msg += f"_internal DLLs ({len(base_dlls)}): {', '.join(base_dlls[:10])}...\n"
-    print(msg, file=sys.stderr)
-    # Try to show a message box even without PyQt
-    try:
-        import ctypes
-        ctypes.windll.user32.MessageBoxW(0, msg, "Voice Note - DLL Error", 0x10)
-    except Exception:
-        pass
-    sys.exit(1)
+except Exception as e:
+    _save_error_log("PyTorch", e)
 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
