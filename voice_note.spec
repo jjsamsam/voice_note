@@ -2,6 +2,10 @@
 """
 PyInstaller spec file for Voice Note application.
 Uses --onedir mode for reliable PyTorch DLL handling on Windows.
+
+CRITICAL: Excludes api-ms-win-* and ucrtbase DLLs — these are Windows
+system DLLs that MUST NOT be bundled. Bundling them from the build server
+causes DLL initialization failures on different Windows versions.
 """
 
 import os
@@ -27,6 +31,27 @@ if ffprobe_path:
 
 # Merge binaries
 added_binaries += torch_binaries + whisper_binaries
+
+# ── Filter out Windows system DLLs that cause conflicts ──
+# These are collected from the build server but conflict with the user's Windows.
+EXCLUDE_DLLS = {
+    'api-ms-win-',          # Windows API sets
+    'ucrtbase',             # Universal C Runtime (system)
+    'vcruntime',            # VC++ Runtime (user should have installed)
+    'msvcp',                # VC++ Runtime
+    'concrt',               # Concurrency Runtime
+}
+
+def should_exclude(name):
+    """Check if a binary should be excluded from bundling."""
+    lower = name.lower()
+    return any(lower.startswith(prefix) for prefix in EXCLUDE_DLLS)
+
+# Filter binaries
+added_binaries = [
+    (src, dst) for src, dst in added_binaries
+    if not should_exclude(os.path.basename(src))
+]
 
 # ── Hidden imports ──
 hiddenimports = [
@@ -64,15 +89,18 @@ a = Analysis(
     noarchive=False,
 )
 
+# ── Also filter from Analysis.binaries (catches DLLs added by hooks) ──
+a.binaries = [
+    (name, src, typ) for name, src, typ in a.binaries
+    if not should_exclude(os.path.basename(name))
+]
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-# ── Use --onedir mode (COLLECT) for reliable DLL handling ──
-# PyTorch's DLL chain (c10.dll etc.) breaks in --onefile temp extraction.
-# --onedir preserves directory structure so DLLs resolve correctly.
 exe = EXE(
     pyz,
     a.scripts,
-    [],           # Don't embed binaries/datas in EXE
+    [],
     exclude_binaries=True,
     name="VoiceNote",
     debug=False,
@@ -81,7 +109,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,   # Temporarily True for DLL diagnostics — change back to False when fixed
+    console=False,   # Back to False — DLL issue fixed
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
