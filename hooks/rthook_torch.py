@@ -1,28 +1,37 @@
 """
 PyInstaller runtime hook for Windows DLL loading.
-Must run BEFORE any torch imports to set up DLL search paths.
+Copies necessary DLLs into torch/lib so c10.dll can find all dependencies
+in its own directory. This is the most reliable approach.
 """
 import os
 import sys
+import shutil
 
 if sys.platform == "win32" and getattr(sys, "frozen", False):
     base_path = sys._MEIPASS
-
-    # Add base extraction dir to DLL search path
-    try:
-        os.add_dll_directory(base_path)
-    except (OSError, AttributeError):
-        pass
-
-    # Add torch/lib directory specifically (c10.dll and dependencies live here)
     torch_lib = os.path.join(base_path, "torch", "lib")
+
     if os.path.isdir(torch_lib):
+        # Copy all DLLs from _internal root INTO torch/lib
+        # so c10.dll can find them in its own directory
+        for fname in os.listdir(base_path):
+            if fname.lower().endswith(".dll"):
+                src = os.path.join(base_path, fname)
+                dst = os.path.join(torch_lib, fname)
+                if not os.path.exists(dst):
+                    try:
+                        shutil.copy2(src, dst)
+                    except Exception:
+                        pass
+
+        # Also add to PATH and os.add_dll_directory as fallback
         try:
+            os.add_dll_directory(base_path)
             os.add_dll_directory(torch_lib)
         except (OSError, AttributeError):
             pass
 
-    # Also prepend to PATH as a fallback
-    os.environ["PATH"] = (
-        torch_lib + os.pathsep + base_path + os.pathsep + os.environ.get("PATH", "")
-    )
+        os.environ["PATH"] = (
+            torch_lib + os.pathsep + base_path + os.pathsep
+            + os.environ.get("PATH", "")
+        )
