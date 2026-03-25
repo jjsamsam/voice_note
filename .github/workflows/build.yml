@@ -72,7 +72,7 @@ jobs:
       - name: 📦 배포 파일 압축 (Windows)
         if: runner.os == 'Windows'
         run: |
-          Compress-Archive -Path dist\VoiceNote\* -DestinationPath VoiceNote-Windows.zip
+          tar -a -c -f VoiceNote-Windows.zip -C dist VoiceNote
 
       - name: ⬆️ 빌드 결과 업로드
         uses: actions/upload-artifact@v4
