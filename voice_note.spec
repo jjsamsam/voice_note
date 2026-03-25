@@ -9,16 +9,18 @@ causes DLL initialization failures on different Windows versions.
 """
 
 import os
-import sys
 import shutil
 from PyInstaller.utils.hooks import collect_all, collect_dynamic_libs
 
 block_cipher = None
 
 # ── Collect PyTorch & Whisper fully ──
-torch_datas, torch_binaries, torch_hiddenimports = collect_all('torch')
+# On Windows, explicitly collect torch DLLs into torch/lib so that the
+# package layout matches what torch expects at runtime.
+torch_datas, _, torch_hiddenimports = collect_all('torch')
 whisper_datas, whisper_binaries, whisper_hiddenimports = collect_all('whisper')
 numpy_datas, numpy_binaries, numpy_hiddenimports = collect_all('numpy')
+torch_binaries = collect_dynamic_libs('torch', destdir='torch/lib')
 
 # ── Find ffmpeg / ffprobe ──
 ffmpeg_path = shutil.which("ffmpeg")
@@ -34,10 +36,11 @@ if ffprobe_path:
 added_binaries += torch_binaries + whisper_binaries + numpy_binaries
 
 # ── Filter out Windows system DLLs that cause conflicts ──
-# These are collected from the build server but conflict with the user's Windows.
-# ONLY exclude api-ms-win-* — keep vcruntime/msvcp/ucrtbase as numpy needs them.
+# These are collected from the build server but should be provided by the
+# target Windows installation instead.
 EXCLUDE_DLLS = {
     'api-ms-win-',          # Windows API sets — always provided by the OS
+    'ucrtbase.dll',         # Do not bundle UCRT from the CI host
 }
 
 def should_exclude(name):
@@ -104,7 +107,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=True,   # Keep True until all DLL issues resolved
@@ -122,7 +125,7 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     name="VoiceNote",
 )

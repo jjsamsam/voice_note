@@ -49,9 +49,13 @@ jobs:
       - name: 📦 의존성 설치 (Windows - CPU-only PyTorch)
         if: runner.os == 'Windows'
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
           pip install torch --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
           pip install -r requirements.txt
+
+      - name: 🔎 Torch 번들 진단
+        run: |
+          python -c "import os, torch; print('torch', torch.__version__); print(torch.__file__); lib = os.path.join(os.path.dirname(torch.__file__), 'lib'); print('torch/lib:', sorted(os.listdir(lib)) if os.path.isdir(lib) else 'missing')"
 
       - name: 🏗️ PyInstaller 빌드
         run: pyinstaller voice_note.spec
